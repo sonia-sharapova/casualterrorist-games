@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Casual Terrorist</title>
+<link rel="icon" type="image/png" href="ultrapremiumhoney/assets/favicon.png">
+<style>
+  :root { --cream: #fff4a8; --glow: #ffe97a; }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; margin: 0; background: #000; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: clamp(20px, 4vh, 44px);
+    min-height: 100dvh;
+    padding: clamp(24px, 5vh, 56px) 16px;
+    color: var(--cream);
+    font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+    text-transform: uppercase;
+  }
+  h1 { margin: 0; font-size: clamp(40px, 8vw, 96px); font-weight: 400; line-height: 1; letter-spacing: .04em; text-align: center; }
+  main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 2.4vw, 32px); width: min(1200px, 100%); }
+  /* Keep all three tiles and the heading on one screen on wide windows. */
+  @media (min-width: 701px) { main { width: min(1200px, 100%, calc((100dvh - 280px) * 3 + 64px)); } }
+  a { display: block; color: inherit; text-decoration: none; outline: none; }
+  h1 a { display: inline; }
+  h1 a:focus-visible { text-decoration: underline; }
+  a.bee { cursor: url(home/cursor_bee.png) 32 32, pointer; }
+  a.crosshair { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23000' stroke-width='4'%3E%3Ccircle cx='32' cy='32' r='24'/%3E%3Cpath d='M32 2V22M32 42V62M2 32H22M42 32H62'/%3E%3C/g%3E%3Cg fill='none' stroke='%23ff2a2a' stroke-width='2'%3E%3Ccircle cx='32' cy='32' r='24'/%3E%3Cpath d='M32 2V22M32 42V62M2 32H22M42 32H62'/%3E%3C/g%3E%3Ccircle cx='32' cy='32' r='2.5' fill='%23ff2a2a' stroke='%23000'/%3E%3C/svg%3E") 32 32, crosshair; }
+  a.bait { cursor: url(home/cursor_bait.png) 1 9, pointer; }
+  a img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border: 3px solid var(--cream); transition: filter .18s, transform .18s; }
+  a span { display: block; margin-top: .55em; font-size: clamp(18px, 2.3vw, 30px); letter-spacing: .05em; text-align: center; transition: color .18s; }
+  a:hover img, a:focus-visible img { filter: drop-shadow(0 0 6px var(--cream)) drop-shadow(0 0 26px var(--glow)); transform: translateY(-4px); }
+  a:hover span, a:focus-visible span { color: #fff; }
+  main a { transition: opacity .18s; }
+  main:has(a:hover, a:focus-visible) a:not(:hover, :focus-visible) { opacity: .78; }
+  @media (max-width: 700px) {
+    body { justify-content: flex-start; }
+    main { grid-template-columns: minmax(0, 1fr); width: min(420px, 100%); }
+    a span { font-size: 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) { a img, a span { transition: none; } a:hover img, a:focus-visible img { transform: none; } }
+</style>
+</head>
+<body>
+  <h1><a href="https://www.instagram.com/casual.terrorist/">Casual Terrorist</a></h1>
+  <main>
+    <a class="bee" href="ultrapremiumhoney/index.html"><img src="home/ultrapremiumhoney.gif" alt=""><span>UltrapremiumHoney</span></a>
+    <a class="crosshair" href="people/index.html"><img src="home/people.gif" alt=""><span>Splitting Crosshairs</span></a>
+    <a class="bait" href="fishing/index.html"><img src="home/fishing.gif" alt=""><span>Fishing</span></a>
+  </main>
+</body>
+</html>

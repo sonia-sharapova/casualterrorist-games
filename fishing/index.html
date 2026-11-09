@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fishing</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: #000; }
+  body { display: grid; place-items: start center; overflow: hidden; }
+  :root { --pad: clamp(16px, 4dvh, 44px); --stage: min(calc(100vw - 16px), calc(100dvh - 2 * var(--pad) - 6dvh)); }
+  body { padding: var(--pad) 0; }
+  #stage { position: relative; width: var(--stage); aspect-ratio: 1; overflow: hidden; background: #000;
+           border: 3px solid #fff4a8;
+           container-type: inline-size; user-select: none; -webkit-user-select: none; touch-action: none; }
+  #stage.shake { animation: shake .34s linear; }
+  @keyframes shake { 25% { transform: translate(-1.2%, .8%); } 50% { transform: translate(1.1%, -.9%); } 75% { transform: translate(-.7%, -.5%); } }
+  .layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  .layer.on { display: block; }
+  #menu { position: absolute; inset: 0; display: none; cursor: none; }
+  #menu.on { display: block; }
+  #menu > img.tray { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .bait-btn { position: absolute; padding: 0; border: 0; background: none; cursor: none; transition: transform .15s; }
+  .bait-btn img { display: block; width: 100%; pointer-events: none; }
+  .bait-btn:hover, .bait-btn:focus-visible { transform: scale(1.05); outline: none; }
+  .bait-btn:hover img, .bait-btn:focus-visible img { filter: drop-shadow(0 0 .35cqw #fff4a8) drop-shadow(0 0 1.3cqw #ffe97a);
+    animation: bob .75s ease-in-out infinite alternate; }
+  @keyframes bob { from { translate: 0 .5cqw; } to { translate: 0 -1cqw; } }
+  @keyframes swing { from { rotate: -7deg; } to { rotate: 9deg; } }
+  #tiny { animation: swing 1.1s ease-in-out infinite alternate; }
+  .bit { animation: flash 1.1s ease-in-out infinite alternate; }
+  @keyframes flash { from { filter: none; } to { filter: brightness(1.28) drop-shadow(0 0 .9cqw rgba(255, 233, 122, .7)); } }
+  #hand { position: absolute; width: 46%; pointer-events: none; display: none; z-index: 5; }
+  #hand img { display: block; width: 100%; position: relative; }
+  #hand .sleeve { position: absolute; z-index: 1; width: 200%; height: 52%; transform-origin: 0 50%; transform: translateY(-50%) rotate(28deg);
+    background: url(assets/sleeve.jpg) repeat-x 0 0 / auto 100%; }
+  #hand.go { transition: left .75s ease-in, top .75s ease-in; }
+  #carried { position: absolute; z-index: 4; display: none; pointer-events: none; }
+  #carried.go { transition: left .75s ease-in, top .75s ease-in; }
+  #world { position: absolute; inset: 0; display: none; }
+  #world.on { display: block; }
+  #world img { position: absolute; pointer-events: none; }
+  #line { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .ring { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; display: none; z-index: 6; }
+  /* Non-image actions (the reel): a small blurred dot that swells every so often. */
+  .ring.dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4.4cqw; height: 4.4cqw; margin: -2.2cqw 0 0 -2.2cqw;
+    border-radius: 50%; background: #ffec7a; filter: blur(.3cqw);
+    box-shadow: 0 0 1cqw .4cqw rgba(255, 232, 110, .85), 0 0 2.2cqw 1cqw rgba(0, 0, 0, .42);
+    animation: breathe 3s ease-in-out infinite; }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 1cqw .4cqw rgba(255, 232, 110, .85), 0 0 2.2cqw 1cqw rgba(0, 0, 0, .42); }
+    55% { transform: scale(1.3); box-shadow: 0 0 2.4cqw 1cqw rgba(255, 232, 110, .75), 0 0 7cqw 4.5cqw rgba(0, 0, 0, .58); }
+  }
+  /* Clickable items: the item itself glows yellow. */
+  .glow { filter: drop-shadow(0 0 .4cqw #fff4a8) drop-shadow(0 0 2cqw #ffe97a);
+    animation: glow 1.3s ease-in-out infinite, bob .75s ease-in-out infinite alternate; }
+  @keyframes glow { 50% { filter: drop-shadow(0 0 .7cqw #fff4a8) drop-shadow(0 0 3.4cqw #ffe97a); } }
+  #say { position: absolute; left: 0; right: 0; top: 6%; text-align: center; color: #fff4a8; z-index: 7; pointer-events: none;
+         font: 8cqw/1.1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .04em; text-transform: uppercase;
+         text-shadow: 0 0 .4em #000, 0 0 .1em #000; }
+  /* Reeling cue: glows yellow when a fish is on, darkens and compresses to orange while held. */
+  #reelDot { position: absolute; left: 50%; bottom: 11%; width: 28cqw; height: 14cqw; margin-left: -14cqw; display: none; z-index: 7; pointer-events: none;
+    transition: transform .14s ease-out; }
+  /* Blurred rectangles, so neither state has a hard edge. */
+  #reelDot::before, #reelDot::after { content: ""; position: absolute; inset: 0; border-radius: 5.5cqw; filter: blur(1.8cqw); transition: opacity .16s; }
+  #reelDot::before { background: #ffe04a; box-shadow: 0 0 6cqw 3cqw rgba(255, 220, 70, .72);
+    animation: reelFlash .75s ease-in-out infinite alternate; }
+  #reelDot::after { background: #e8681a; box-shadow: 0 0 1.8cqw .6cqw rgba(150, 60, 10, .55); opacity: 0; }
+  @keyframes reelFlash { from { opacity: 0; } to { opacity: 1; } }
+  #reelDot.held { transform: scale(.66); }
+  #reelDot.held::before { animation: none; opacity: 0; }
+  #reelDot.held::after { opacity: 1; }
+  /* Word runs gold to black in step with the flash, so it reads against both the dim and bright rectangle. */
+  #reelDot span { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: #ffe27a;
+    font: 400 7cqw "Helvetica Neue", Arial, sans-serif; letter-spacing: .14em;
+    animation: reelText .75s ease-in-out infinite alternate; transition: color .16s; }
+  @keyframes reelText { from { color: #ffe27a; } to { color: #4a4030; } }
+  #reelDot.held span { animation: none; color: #3a2410; }
+  #sound { position: absolute; top: 1.6%; right: 1.6%; display: flex; gap: .8cqw; z-index: 9; }
+  .snd { width: max(36px, 5.6cqw); aspect-ratio: 1; padding: .6cqw; border: 0; cursor: pointer; background: none; color: #fff4a8;
+         filter: drop-shadow(0 0 .3cqw rgba(0, 0, 0, .95)); }
+  .snd:focus-visible { outline: 2px solid #fff4a8; }
+  .snd svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .snd .solid { fill: currentColor; }
+  .snd .slash { display: none; }
+  .snd.off { color: #b9b4a0; }
+  .snd.off .slash { display: inline; }
+  .snd.off .on { display: none; }
+  /* Sits outside the game frame: to its right, level with the top, or below it when there's no room at the side. */
+  #helpText { display: none; position: fixed; top: var(--pad); left: calc(50vw + var(--stage) / 2 + 12px); box-sizing: border-box;
+              width: max-content; max-width: min(380px, calc(50vw - var(--stage) / 2 - 24px));
+              /* Vertical padding puts the first line of text level with the icons inside the frame. */
+              --line-up: calc(1px + var(--stage) * .016 + max(18px, var(--stage) * .028) - .675em); padding: var(--line-up) 1.2em;
+              background: #000; border: 2px solid #fff4a8; color: #fff4a8; font: 17px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; pointer-events: none; }
+  #helpText.hover, #helpText.open { display: block; }
+  @media (max-aspect-ratio: 13/10) {
+    #helpText { top: calc(var(--pad) + var(--stage) + 8px); left: 50vw; transform: translateX(-50%); max-width: min(520px, calc(100vw - 16px)); padding: .7em .9em; }
+  }
+  #again { position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%); display: none; z-index: 8; cursor: pointer;
+           padding: .35em .8em; border: 2px dotted #fff4a8; background: rgba(0,0,0,.72); color: #fff4a8;
+           font: 3.6cqw Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .05em; text-transform: uppercase; }
+  @media (prefers-reduced-motion: reduce) { #stage.shake, .ring::after, .glow, .bait-btn img, #tiny, .bit, #reelDot::before, #reelDot span { animation: none !important; color: #111; } }
+</style>
+</head>
+<body>
+<main id="stage" aria-label="Fishing game">
+  <img id="bg" class="layer" alt="">
+  <video id="cast" class="layer" src="clips/cast.mp4" preload="auto" playsinline></video>
+  <video id="win" class="layer" src="clips/win.mp4" preload="auto" playsinline></video>
+  <video id="lose" class="layer" src="clips/lose.mp4" preload="auto" playsinline></video>
+  <audio id="diveAudio" src="clips/dive.m4a" preload="auto"></audio>
+
+  <div id="world">
+    <svg id="line" viewBox="0 0 100 100" preserveAspectRatio="none"><path id="ln" fill="none" stroke="#eee" stroke-width=".22"/></svg>
+    <img id="monster" src="assets/monster_closed.png" alt="" style="display:none;width:78%;left:11%;transform:none">
+    <img id="patch" src="bg/placeholder_rodtip_patch.png" alt="" style="display:none;left:27%;top:8%;width:10%;height:14.5%">
+    <img id="tiny" alt="" style="display:none;left:31.8%;top:15%;width:10%">
+    <img id="bait" alt="" style="display:none">
+  </div>
+
+  <div id="menu">
+    <img class="tray" src="bg/placeholder_menu_empty.jpg" alt="">
+  </div>
+  <img id="carried" alt="">
+  <div id="hand"><div class="sleeve"></div><img id="handImg" src="assets/openHand.png" alt=""></div>
+
+  <button id="ring" class="ring" type="button"></button>
+  <div id="sound">
+    <button id="muteBg" class="snd" type="button" aria-pressed="false" aria-label="Mute background sound, keep action sounds" title="Background sound">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle class="solid" cx="6.5" cy="18" r="2.5"/><circle class="solid" cx="16.5" cy="16" r="2.5"/><path class="slash" d="M3 3l18 18"/></svg>
+    </button>
+    <button id="muteAll" class="snd" type="button" aria-pressed="false" aria-label="Mute all sound" title="All sound">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="solid" d="M3 9.5v5h4l5 4v-13l-5 4z"/><path class="on" d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/><path class="slash" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+    </button>
+    <button id="helpBtn" class="snd" type="button" aria-expanded="false" aria-controls="helpText" aria-label="What do I do?" title="What do I do?">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.1 1-1.1 1.9"/><circle class="solid" cx="12" cy="16.9" r=".5"/></svg>
+    </button>
+  </div>
+  <div id="reelDot"><span>HOLD</span></div>
+  <div id="say" role="status"></div>
+  <button id="again" type="button">Play again</button>
+</main>
+<div id="helpText" role="status"></div>
+
+<script>
+// Menu positions are % of the stage. flip = sprite's head points right, so mirror it to face left in the water.
+const BAITS = {
+  bait1:    { x: 7.03,  y: 7.05,  w: 28.17, flip: true,  label: 'Blue crankbait' },
+  bait2:    { x: 59.43, y: 5.62,  w: 36.65, flip: false, label: 'Silver popper' },
+  bait_new: { x: 17,    y: 31,    w: 30,    flip: false, label: 'Perch swimbait' },
+  bait3:    { x: 58.89, y: 32.51, w: 35.12, flip: false, label: 'Spotted crankbait' },
+  bait4:    { x: 4.97,  y: 52.23, w: 21.63, flip: true,  label: 'Dark lipped lure' },
+  bait5:    { x: 31.24, y: 53.32, w: 23.58, flip: false, label: 'Pale crankbait' },
+  bait6:    { x: 62.76, y: 54.86, w: 29.86, flip: true,  label: 'Green striped plug' },
+  bait7:    { x: 6.34,  y: 77.83, w: 44.58, flip: true,  label: 'Yellow minnow' },
+};
+// Where the line ties on, as [x, y] fractions of the left-facing sprite, plus height/width:
+// the top of the body a third of the way along. bait_new ties to the wire already drawn on it.
+const TIE = {
+  bait1: [.324, .298, .554], bait2: [.300, .138, .508], bait_new: [.164, .018, .575], bait3: [.318, .146, .48],
+  bait4: [.364, .170, .891], bait5: [.355, .118, .628], bait6: [.350, .040, .433], bait7: [.346, .170, .186],
+};
+// Bait width (% of stage) in every scene after the menu.
+const baitW = () => ({ bait4: 24, bait5: 26, bait6: 28, bait7: 36 })[chosen] ?? 34;
+let submerged = false, monsterX = 50; // monsterX = centre of the monster, % of stage
+const waterW = () => baitW() * (submerged ? .82 : 1); // a little smaller once it's underwater
+const BG = { air: 'bg/placeholder_air.jpg', surface: 'bg/placeholder_surface.jpg', under: 'bg/placeholder_under.jpg' };
+const FISH = [
+  { frames: ['assets/fish1a.png', 'assets/fish1b.png'], dir: 1 },   // swims right
+  { frames: ['assets/fish2a.png', 'assets/fish2b.png'], dir: -1 },  // swims left
+];
+// [image, fingertip x%, fingertip y%, sleeve start x%, sleeve start y%]
+const HANDS = { open: ['assets/openHand.png', 2.6, 18.5, 70, 56], reach: ['assets/hand.png', 1, 19.5, 82, 56], grab: ['assets/grab.png', 3, 12, 70, 51] };
+const BITE_TIME = 3.4;   // seconds for the monster to rise all the way up
+const MONSTER_H = 61, MOUTH_TOP = .4, MOUTH_HALF_W = 20; // monster height, top of its mouth (fraction down), mouth half-width, in % of stage
+const REEL_SPEED = 38, FISH_PULL = 7, LURE_RADIUS = 40;
+
+const $ = (id) => document.getElementById(id);
+const stage = $('stage'), bg = $('bg'), world = $('world'), menu = $('menu'), hand = $('hand'), handImg = $('handImg'),
+      carried = $('carried'), ring = $('ring'), say = $('say'), again = $('again'), baitEl = $('bait'), monster = $('monster'), ln = $('ln');
+const clips = { cast: $('cast'), win: $('win'), lose: $('lose') };
+const reelDot = $('reelDot');
+
+[...Object.keys(BAITS).map((k) => `assets/bait/${k}.png`), 'assets/monster_open.png', 'assets/monster_closed.png',
+ 'assets/hand.png', 'assets/grab.png', 'assets/openHand.png', 'bg/lose_game.png', 'bg/lose_game_2.png', 'bg/win_game.png',
+ ...Object.values(BG), ...FISH.flatMap((f) => f.frames)].forEach((s) => { new Image().src = s; });
+
+let chosen = 'bait_new', raf = 0, timers = [], ptr = { x: 40, y: 50 }, holding = false;
+const later = (ms, fn) => timers.push(setTimeout(fn, ms));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const shake = () => { stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake'); };
+function pct(e) { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 }; }
+
+// The fishing line: its top drifts side to side and its middle bows, redrawn every frame.
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const lineEnd = { on: false, x: 0, y: 0 };
+const flow = { x: 0, y: 0 };
+let thrash = false;
+let bow = null, lastSway = performance.now(); // the line's middle trails behind the bait
+(function sway(now) {
+  const dt = Math.min(.05, (now - lastSway) / 1000); lastSway = now;
+  if (lineEnd.on) {
+    const k = calm ? 0 : 1;
+    const x1 = 62 + k * (Math.sin(now / 1500) * 4 + Math.sin(now / 610) * 1.1);
+    const mx = (x1 + lineEnd.x) / 2 + k * Math.sin(now / 980) * 2.2;
+    const my = (lineEnd.y - 2) / 2;
+    if (!bow || calm) bow = { x: mx, y: my };
+    bow.x += (mx - bow.x) * Math.min(1, dt * 4.5);
+    bow.y += (my - bow.y) * Math.min(1, dt * 4.5);
+    ln.setAttribute('d', `M ${x1} -2 Q ${bow.x} ${bow.y} ${lineEnd.x} ${lineEnd.y}`);
+  } else bow = null;
+  requestAnimationFrame(sway);
+})(performance.now());
+
+// On frames waiting for a click: step forward a few movie frames, pause, step back, pause.
+let scrubTimer = 0;
+function stopScrub() { clearTimeout(scrubTimer); }
+function scrub(v, from, to) {
+  stopScrub();
+  let t = from, dir = 1;
+  const step = () => {
+    t += dir / 24;
+    let wait = 120;
+    if (t >= to) { t = to; dir = -1; wait = 850; } else if (t <= from) { t = from; dir = 1; wait = 850; }
+    if (!v.seeking) v.currentTime = t;
+    scrubTimer = setTimeout(step, wait);
+  };
+  step();
+}
+
+function hideAll() {
+  stopScrub();
+  submerged = false;
+  timers.forEach(clearTimeout); timers = []; cancelAnimationFrame(raf);
+  $('patch').style.display = $('tiny').style.display = 'none';
+  baitEl.classList.remove('glow');
+  Object.values(clips).forEach((v) => { v.pause(); v.classList.remove('on'); v.onended = null; });
+  bg.classList.remove('on'); world.classList.remove('on'); menu.classList.remove('on');
+  ring.style.display = again.style.display = hand.style.display = carried.style.display = reelDot.style.display = 'none';
+  reelDot.classList.remove('held');
+  baitEl.style.display = monster.style.display = 'none'; baitEl.style.transition = '';
+  lineEnd.on = false; ln.removeAttribute('d'); thrash = false;
+  say.textContent = '';
+  world.querySelectorAll('.fish').forEach((f) => f.remove());
+}
+function showBg(src) { bg.src = src; bg.classList.add('on'); }
+function setHand(kind, p) {
+  const [src, ax, ay, sx, sy] = HANDS[kind];
+  if (!handImg.src.endsWith(src)) handImg.src = src;
+  Object.assign(hand.firstElementChild.style, { left: sx + '%', top: sy + '%' });
+  hand.style.left = `calc(${p.x}% - ${ax * .46}%)`;
+  hand.style.top = `calc(${p.y}% - ${ay * .34}%)`;
+}
+function placeRing(x, y, w, h, fn, dot) {
+  ring.classList.toggle('dot', !!dot);
+  Object.assign(ring.style, { left: x + '%', top: y + '%', width: w + '%', height: h + '%', display: 'block' });
+  ring.onclick = () => { ring.style.display = 'none'; fn(); };
+}
+
+// Sound buttons. "Background" is the movie's own audio; action sounds are the ones the game makes itself.
+const sound = { all: false, bg: false };
+try { Object.assign(sound, JSON.parse(localStorage.getItem('fishing-sound') || '{}')); } catch (e) {}
+function applySound() {
+  [...Object.values(clips), $('diveAudio')].forEach((el) => { el.muted = sound.all || sound.bg; });
+  for (const [id, key] of [['muteAll', 'all'], ['muteBg', 'bg']]) {
+    $(id).classList.toggle('off', sound[key]);
+    $(id).setAttribute('aria-pressed', sound[key]);
+  }
+  try { localStorage.setItem('fishing-sound', JSON.stringify(sound)); } catch (e) {}
+}
+for (const [id, key] of [['muteAll', 'all'], ['muteBg', 'bg']]) {
+  $(id).addEventListener('pointerdown', (e) => e.stopPropagation()); // so pressing it doesn't count as reeling
+  $(id).addEventListener('click', (e) => { e.stopPropagation(); unlockAudio(); sound[key] = !sound[key]; applySound(); });
+}
+applySound();
+
+// The "?" button: says what the player needs to do right now.
+const helpBtn = $('helpBtn'), helpText = $('helpText');
+function act(text) { helpText.textContent = text; }
+helpBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+helpBtn.addEventListener('pointerenter', () => helpText.classList.add('hover'));
+helpBtn.addEventListener('pointerleave', () => helpText.classList.remove('hover'));
+helpBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  helpBtn.setAttribute('aria-expanded', helpText.classList.toggle('open'));
+});
+
+// Short synthesized bubble: two quick rising blips. Browsers keep audio off until the first click or key press.
+let audio = null;
+function unlockAudio() {
+  audio ??= new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === 'suspended') audio.resume().catch(() => {});
+}
+addEventListener('pointerdown', unlockAudio);
+addEventListener('keydown', unlockAudio);
+function bubble() {
+  if (!audio || audio.state !== 'running' || sound.all) return;
+  const t = audio.currentTime, pitch = .9 + Math.random() * .25;
+  [[0, 320, 760], [.07, 430, 980]].forEach(([delay, from, to]) => {
+    const start = t + delay, osc = audio.createOscillator(), gain = audio.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(from * pitch, start);
+    osc.frequency.exponentialRampToValueAtTime(to * pitch, start + .07);
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(.16, start + .012);
+    gain.gain.exponentialRampToValueAtTime(.0001, start + .08);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(start);
+    osc.stop(start + .09);
+  });
+}
+
+/* ---------- 1. Homepage: tackle box ---------- */
+for (const [id, b] of Object.entries(BAITS)) {
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'bait-btn'; btn.dataset.id = id;
+  btn.setAttribute('aria-label', b.label);
+  btn.style.cssText = `left:${b.x}%;top:${b.y}%;width:${b.w}%`;
+  btn.innerHTML = `<img src="assets/bait/${id}.png" alt="">`;
+  btn.onpointerenter = () => { menuPose = 'reach'; bubble(); };
+  btn.onpointerleave = () => { menuPose = 'open'; };
+  btn.onclick = () => pick(id, btn);
+  menu.append(btn);
+}
+let menuPose = 'open', picking = false;
+function goMenu() {
+  hideAll(); picking = false; menuPose = 'open';
+  act('Click a bait to choose it.');
+  hand.classList.remove('go'); carried.classList.remove('go');
+  menu.querySelectorAll('.bait-btn').forEach((b) => { b.style.visibility = ''; });
+  menu.classList.add('on'); hand.style.display = 'block';
+  setHand('open', { x: 62, y: 48 });
+}
+stage.addEventListener('pointermove', (e) => {
+  ptr = pct(e);
+  if (menu.classList.contains('on') && !picking) setHand(menuPose, ptr);
+});
+function pick(id, btn) {
+  if (picking) return;
+  picking = true; chosen = id;
+  const b = BAITS[id];
+  const at = { x: b.x + b.w / 2, y: b.y + b.w * .22 };
+  setHand('grab', { x: at.x - b.w * .15, y: at.y });
+  btn.style.visibility = 'hidden';
+  carried.src = `assets/bait/${id}.png`;
+  Object.assign(carried.style, { display: 'block', left: b.x + '%', top: b.y + '%', width: b.w + '%' });
+  later(240, () => {
+    hand.classList.add('go'); carried.classList.add('go');
+    hand.style.left = '112%'; hand.style.top = '70%';
+    carried.style.left = '125%'; carried.style.top = '70%';
+  });
+  later(1010, hold);
+}
+
+/* ---------- 2. Frozen: he holds up the chosen bait ---------- */
+function hold() {
+  hideAll();
+  clips.cast.currentTime = 0; clips.cast.classList.add('on');
+  world.classList.add('on');
+  const b = BAITS[chosen];
+  baitEl.src = `assets/bait/${chosen}.png`;
+  Object.assign(baitEl.style, { display: 'block', left: '16%', top: '48%', width: baitW() * 1.47 + '%',
+    transform: `translate(-50%,-50%) rotate(80deg) scaleX(${b.flip ? -1 : 1})`, transition: 'top .45s ease-in' });
+  baitEl.classList.add('glow');
+  act('Click the glowing bait to hook it on.');
+  placeRing(0, 13, 33, 70, () => {
+    act('Watch.');
+    baitEl.classList.remove('glow');
+    baitEl.style.top = '-40%';
+    later(380, () => {
+      baitEl.style.display = 'none'; baitEl.style.transition = '';
+      stopScrub();
+      const tiny = $('tiny');
+      tiny.src = baitEl.src;
+      tiny.style.transform = `translate(-50%,-50%) rotate(80deg) scaleX(${b.flip ? -1 : 1})`;
+      tiny.style.width = baitW() * .3 + '%';
+      tiny.style.display = 'block';
+      clips.cast.currentTime = 0;
+      clips.cast.onended = reel; clips.cast.play().catch(reel);
+      later(830, () => { tiny.style.display = $('patch').style.display = 'none'; }); // the movie cuts away from the rod tip here
+    });
+  });
+  $('patch').style.display = 'block';
+  scrub(clips.cast, 0, .25);
+}
+/* ---------- 3. Frozen: the reel, click to cast ---------- */
+function reel() { act('Click the yellow dot on the reel to cast.'); clips.cast.pause(); scrub(clips.cast, 1.65, 1.9); placeRing(0, 36, 33, 40, dive, true); }
+
+/* ---------- 4. Dive: bait over placeholder backgrounds ---------- */
+function placeBait(x, y) {
+  const b = BAITS[chosen];
+  const w = waterW();
+  // Underwater the bait drifts a touch, and jerks with the fish once one is on.
+  const t = performance.now(), k = submerged && !calm ? 1 : 0;
+  flow.x = k * (Math.sin(t / 850) * .7 + (thrash ? Math.sin(t / 70) * .55 : 0));
+  flow.y = k * (Math.sin(t / 1150 + 1) * .6 + (thrash ? Math.cos(t / 90) * .35 : 0));
+  x += flow.x; y += flow.y;
+  Object.assign(baitEl.style, { display: 'block', left: x + '%', top: y + '%', width: w + '%',
+    transform: `translateY(-50%) scaleX(${b.flip ? -1 : 1})` });
+  const [tx, ty, ar] = TIE[chosen];
+  Object.assign(lineEnd, { on: true, x: x + tx * w, y: y + (ty - .5) * w * ar });
+  return w;
+}
+function dive() {
+  hideAll();
+  act('Watch.');
+  const a = $('diveAudio'); a.currentTime = 0; a.play().catch(() => {});
+  world.classList.add('on'); showBg(BG.air);
+  const start = performance.now();
+  (function fall(now) {
+    const t = Math.min(1, (now - start) / 1400);
+    placeBait(28, -20 + 66 * t);
+    if (t < 1) raf = requestAnimationFrame(fall);
+  })(start);
+  later(1400, () => { showBg(BG.surface); shake(); });
+  later(2100, () => { showBg(BG.under); fishing(); });
+}
+
+/* ---------- 5. Underwater: lure, bite, reel or lose ---------- */
+function fishing() {
+  submerged = true;
+  monsterX = 50;
+  act('Move your cursor to swing the bait near a fish.');
+  const sp = { x: 28, y: 46 };
+  let fishes = [], lastSpawn = 0, lastT = performance.now(), started = lastT, hooked = null, biteAt = 0, done = false;
+  say.textContent = '';
+
+  function spawn(now) {
+    const kind = FISH[Math.random() < .5 ? 0 : 1];
+    const el = new Image();
+    el.className = 'fish'; el.alt = ''; el.src = kind.frames[0];
+    el.style.width = 30 + Math.random() * 11 + '%';
+    world.insertBefore(el, baitEl);
+    fishes.push({ el, kind, x: kind.dir > 0 ? -20 : 120, y: 14 + Math.random() * 72, v: 14 + Math.random() * 10,
+                  state: 'swim', will: Math.random() < .7, tilt: 0, born: now });
+  }
+  function drawFish(f, now) {
+    f.el.src = f.kind.frames[Math.floor(now / (f.state === 'hooked' ? 70 : 170)) % 2];
+    f.el.style.left = f.x + '%'; f.el.style.top = f.y + '%';
+    f.el.style.transform = `translate(-50%,-50%) rotate(${f.tilt}deg)`;
+  }
+  function tick(now) {
+    if (done) return;
+    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+    const w = placeBait(sp.x, sp.y);
+    const cx = sp.x + w / 2;
+
+    if (!hooked) {
+      sp.x += (clamp(ptr.x - w / 2, 12, 55) - sp.x) * Math.min(1, dt * 4);
+      sp.y += (clamp(ptr.y, 28, 68) - sp.y) * Math.min(1, dt * 4);
+      if (now - lastSpawn > 1000 && fishes.length < 6) { spawn(now); lastSpawn = now; }
+      const force = now - started > 8000;
+      const hunting = fishes.some((f) => f.state === 'lured') || now - started < 2600; // let a few swim by first
+      for (const f of fishes) {
+        const ahead = f.kind.dir > 0 ? f.x < cx : f.x > cx;
+        const d = Math.hypot(cx - f.x, sp.y - f.y);
+        if (f.state === 'swim' && !hunting && ahead && d < LURE_RADIUS && (f.will || force)) f.state = 'lured';
+        if (f.state === 'lured') {
+          const a = Math.atan2(sp.y - f.y, cx - f.x), sx = 21;
+          f.x += Math.cos(a) * sx * dt; f.y += Math.sin(a) * sx * dt;
+          const slope = Math.atan2(sp.y - f.y, Math.abs(cx - f.x)) * 180 / Math.PI;
+          f.tilt = clamp(slope, -30, 30) * f.kind.dir;
+          if (d < 9) { f.state = 'hooked'; hooked = f; biteAt = now; thrash = true; act('Press and hold the mouse (or Space) to reel the fish out before the monster reaches it.'); f.el.classList.add('bit'); reelDot.style.display = 'block'; shake();
+            fishes.filter((o) => o !== f).forEach((o) => { o.v = 60; o.state = 'flee'; }); }
+        } else { f.x += f.kind.dir * f.v * dt; }
+        drawFish(f, now);
+      }
+      fishes = fishes.filter((f) => { if (f.x < -30 || f.x > 130) { f.el.remove(); return false; } return true; });
+    } else {
+      reelDot.classList.toggle('held', holding);
+      // While reeling, ease very slightly toward the cursor; the monster tracks the fish.
+      if (holding) sp.x = clamp(sp.x + clamp((ptr.x - w / 2 - sp.x) / 10, -1, 1) * 6 * dt, 8, 60);
+      monsterX = clamp(monsterX + (hooked.x - monsterX) * dt * 1.5, 28, 72);
+      sp.y = holding ? sp.y - REEL_SPEED * dt : Math.min(70, sp.y + FISH_PULL * dt);
+      hooked.x = sp.x + w / 2 + flow.x; hooked.y = sp.y + 3 + flow.y; hooked.tilt = Math.sin(now / 60) * 12;
+      drawFish(hooked, now);
+      for (const f of fishes) if (f !== hooked) { f.x += f.kind.dir * f.v * dt; drawFish(f, now); }
+      const p = (now - biteAt) / 1000 / BITE_TIME;
+      monster.src = p > .6 ? 'assets/monster_open.png' : 'assets/monster_closed.png';
+      const monsterTop = 112 - 71 * Math.min(1, p);
+      Object.assign(monster.style, { display: 'block', left: monsterX - 39 + '%', top: monsterTop + '%' });
+      // Caught if it reaches the top untouched; eaten only if the mouth actually touches it.
+      if (sp.y < -14) { done = true; caught(); return; }
+      const touching = hooked.y + 5 >= monsterTop + MOUTH_TOP * MONSTER_H && Math.abs(hooked.x - monsterX) < MOUTH_HALF_W;
+      if (touching) { done = true; chomp(hooked); return; }
+    }
+    raf = requestAnimationFrame(tick);
+  }
+  raf = requestAnimationFrame(tick);
+}
+function chomp(f) {
+  say.textContent = '';
+  monster.src = 'assets/monster_open.png';
+  thrash = false;
+  act('Watch.');
+  reelDot.style.display = 'none';
+  const w = waterW();
+  baitEl.style.transition = f.el.style.transition = 'left .28s ease-in, top .28s ease-in, width .28s ease-in';
+  placeBait(monsterX - w / 2, 74);
+  f.el.classList.remove('bit');
+  f.el.style.width = '30%'; // fits inside the mouth
+  f.el.style.left = monsterX + '%'; f.el.style.top = '76%'; f.el.style.transform = 'translate(-50%,-50%)';
+  world.append(f.el, baitEl);
+  later(650, () => {
+    monster.src = 'assets/monster_closed.png';
+    f.el.style.display = 'none'; baitEl.style.display = 'none'; Object.assign(lineEnd, { x: monsterX, y: 58 });
+    shake();
+  });
+  later(1550, () => { monster.style.transition = 'top .7s ease-in'; monster.style.top = '115%'; });
+  later(2300, () => { monster.style.transition = ''; ending('lose'); });
+}
+function caught() { ending('win'); }
+
+/* ---------- 6. Endings: movie clip, then frozen frame ---------- */
+function ending(which) {
+  hideAll();
+  act('Watch.');
+  const v = clips[which];
+  v.currentTime = 0; v.classList.add('on');
+  const finish = () => {
+    v.classList.remove('on');
+    if (which === 'win') { showBg('bg/win_game.png'); say.textContent = 'You win'; }
+    else {
+      let i = 0;
+      showBg('bg/lose_game.png');
+      const swap = () => { i++; bg.src = i % 2 ? 'bg/lose_game_2.png' : 'bg/lose_game.png'; later(420, swap); };
+      later(420, swap);
+      say.textContent = 'Game over';
+    }
+    again.style.display = 'block';
+    act('Click Play again.');
+  };
+  v.onended = finish;
+  v.play().catch(finish);
+}
+again.onclick = goMenu;
+
+addEventListener('pointerdown', () => { holding = true; });
+addEventListener('pointerup', () => { holding = false; });
+addEventListener('pointercancel', () => { holding = false; });
+addEventListener('keydown', (e) => { if (e.code === 'Space') { holding = true; if (world.classList.contains('on')) e.preventDefault(); } });
+addEventListener('keyup', (e) => { if (e.code === 'Space') holding = false; });
+
+goMenu();
+</script>
+</body>
+</html>
